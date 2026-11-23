@@ -578,6 +578,48 @@ class TestDefusedGzip(DefusedTestCase):
             response = self.get_gzipped(4096)
             self.decode_response(response, 4095, 8192)
 
+    def test_defused_gzip_response_read_defaults(self):
+        for size in (None, -1):
+            response = self.get_gzipped(4096)
+            dec = xmlrpc.DefusedGzipDecodedResponse(response)
+            self.assertEqual(dec.read(size), b"d" * 4096)
+
+        response = self.get_gzipped(4096)
+        dec = xmlrpc.DefusedGzipDecodedResponse(response)
+        self.assertEqual(dec.read(), b"d" * 4096)
+
+    def test_defused_gzip_response_all_read_methods(self):
+        def get_dec():
+            response = self.get_gzipped(4096)
+            return xmlrpc.DefusedGzipDecodedResponse(response, 4095)
+
+        with self.assertRaises(ValueError):
+            get_dec().read()
+        with self.assertRaises(ValueError):
+            get_dec().read(None)
+        with self.assertRaises(ValueError):
+            get_dec().read1()
+        with self.assertRaises(ValueError):
+            get_dec().readline()
+        with self.assertRaises(ValueError):
+            get_dec().readline(8192)
+        with self.assertRaises(ValueError):
+            get_dec().readlines()
+        with self.assertRaises(ValueError):
+            get_dec().readinto(bytearray(8192))
+        with self.assertRaises(ValueError):
+            get_dec().readinto1(bytearray(8192))
+        with self.assertRaises(ValueError):
+            next(get_dec())
+
+    def test_defused_gzip_response_peek(self):
+        response = self.get_gzipped(4096)
+        dec = xmlrpc.DefusedGzipDecodedResponse(response, 1024)
+        data = dec.peek(8192)
+        self.assertLessEqual(len(data), 1024)
+        self.assertEqual(dec.tell(), 0)
+        self.assertEqual(dec.read(1024), b"d" * 1024)
+
 
 def test_main():
     suite = unittest.TestSuite()

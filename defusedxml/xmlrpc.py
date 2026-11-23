@@ -80,17 +80,87 @@ class DefusedGzipDecodedResponse(gzip.GzipFile if gzip else object):
         self.stringio = io.BytesIO(data)
         super().__init__(mode="rb", fileobj=self.stringio)
 
-    def read(self, n):
-        if self.limit >= 0:
-            left = self.limit - self.readlength
-            n = min(n, left + 1)
-            data = gzip.GzipFile.read(self, n)
-            self.readlength += len(data)
-            if self.readlength > self.limit:
-                raise ValueError("max payload length exceeded")
-            return data
+    def _check_limit(self, data):
+        self.readlength += len(data)
+        if self.readlength > self.limit:
+            raise ValueError("max payload length exceeded")
+        return data
+
+    def _remaining(self):
+        return max(self.limit - self.readlength, 0)
+
+    def read(self, n=-1):
+        if self.limit < 0:
+            if n is None:
+                n = -1
+            return gzip.GzipFile.read(self, n)
+        if n is None or n < 0:
+            n = self._remaining() + 1
         else:
-            return super().read(n)
+            n = min(n, self._remaining() + 1)
+        return self._check_limit(gzip.GzipFile.read(self, n))
+
+    def read1(self, n=-1):
+        if self.limit < 0:
+            if n is None:
+                n = -1
+            return gzip.GzipFile.read1(self, n)
+        if n is None or n < 0:
+            n = min(io.DEFAULT_BUFFER_SIZE, self._remaining() + 1)
+        else:
+            n = min(n, self._remaining() + 1)
+        return self._check_limit(gzip.GzipFile.read1(self, n))
+
+    def readline(self, size=-1):
+        if self.limit < 0:
+            if size is None:
+                size = -1
+            return gzip.GzipFile.readline(self, size)
+        if size is None or size < 0:
+            size = self._remaining() + 1
+        else:
+            size = min(size, self._remaining() + 1)
+        return self._check_limit(gzip.GzipFile.readline(self, size))
+
+    def readlines(self, hint=-1):
+        if hint is None:
+            hint = -1
+        lines = []
+        total = 0
+        while True:
+            line = self.readline()
+            if not line:
+                break
+            lines.append(line)
+            total += len(line)
+            if hint > 0 and total >= hint:
+                break
+        return lines
+
+    def peek(self, n=-1):
+        if self.limit < 0:
+            if n is None:
+                n = -1
+            return gzip.GzipFile.peek(self, n)
+        if n is None or n < 0:
+            n = self._remaining()
+        else:
+            n = min(n, self._remaining())
+        if n <= 0:
+            return b""
+        return gzip.GzipFile.peek(self, n)[:n]
+
+    def readinto(self, b):
+        with memoryview(b) as view, view.cast("B") as byte_view:
+            data = self.read(len(byte_view))
+            byte_view[: len(data)] = data
+        return len(data)
+
+    def readinto1(self, b):
+        with memoryview(b) as view, view.cast("B") as byte_view:
+            data = self.read1(len(byte_view))
+            byte_view[: len(data)] = data
+        return len(data)
 
     def close(self):
         super().close()
