@@ -17,7 +17,12 @@ from xml.etree.ElementTree import tostring
 import importlib
 
 
-from .common import DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden
+from .common import (
+    DTDForbidden,
+    EntitiesForbidden,
+    ExternalReferenceForbidden,
+    _check_parser,
+)
 
 __origin__ = "xml.etree.ElementTree"
 
@@ -127,6 +132,8 @@ def parse(source, parser=None, forbid_dtd=False, forbid_entities=True, forbid_ex
             forbid_entities=forbid_entities,
             forbid_external=forbid_external,
         )
+    else:
+        _check_parser(parser, forbid_dtd, forbid_entities, forbid_external)
     return _parse(source, parser)
 
 
@@ -145,6 +152,8 @@ def iterparse(
             forbid_entities=forbid_entities,
             forbid_external=forbid_external,
         )
+    else:
+        _check_parser(parser, forbid_dtd, forbid_entities, forbid_external)
     return _iterparse(source, events, parser)
 
 

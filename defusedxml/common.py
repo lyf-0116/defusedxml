@@ -72,6 +72,52 @@ class NotSupportedError(DefusedXmlException):
     """The operation is not supported"""
 
 
+class _Missing:
+    """Sentinel for attributes that a parser does not expose."""
+
+    def __repr__(self):
+        return "<missing>"
+
+
+_MISSING = _Missing()
+
+
+def _check_parser(parser, forbid_dtd, forbid_entities, forbid_external):
+    """Validate that a caller-provided parser honors the defusing switches.
+
+    The facade functions can only enforce ``forbid_dtd``, ``forbid_entities``
+    and ``forbid_external`` when they create the parser themselves. When the
+    caller passes in an existing parser, silently ignoring the switches would
+    either weaken the requested protection (a permissive parser expands
+    entities even though ``forbid_entities=True``) or give a false sense of
+    being able to relax a strict parser. Instead the parser's configuration is
+    compared against the requested switches and a :class:`TypeError` is raised
+    on any mismatch. A parser that does not expose the defusing attributes at
+    all (e.g. a plain stdlib parser) is rejected as well.
+    """
+    switches = {
+        "forbid_dtd": forbid_dtd,
+        "forbid_entities": forbid_entities,
+        "forbid_external": forbid_external,
+    }
+    for name, expected in switches.items():
+        actual = getattr(parser, name, _MISSING)
+        if actual is _MISSING:
+            raise TypeError(
+                "Parser {!r} does not support the defusedxml '{}' option, "
+                "use a parser created by defusedxml or omit the 'parser' "
+                "argument.".format(parser, name)
+            )
+        if bool(actual) != bool(expected):
+            raise TypeError(
+                "Parser {!r} has {}={!r} but the facade was called with "
+                "{}={!r}. Configure the switches on the parser itself and "
+                "do not pass conflicting arguments.".format(
+                    parser, name, actual, name, expected
+                )
+            )
+
+
 def _apply_defusing(defused_mod):
     assert defused_mod is sys.modules[defused_mod.__name__]
     stdlib_name = defused_mod.__origin__

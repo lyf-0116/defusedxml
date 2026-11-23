@@ -328,6 +328,15 @@ forbid_external (default: True)
   or DTD and raising an *ExternalReferenceForbidden* exception when a DTD
   or entity references an external resource.
 
+When a facade function receives a caller-provided ``parser`` (the
+``parse()`` and ``iterparse()`` functions of ``defusedxml.ElementTree``,
+``defusedxml.pulldom`` and ``defusedxml.minidom``), the three switches are
+only honored when the parser was created by defusedxml and is configured
+with the same values. The parser is never modified. A mismatch between its
+configuration and the requested switches, or a parser that does not support
+the switches (for example a plain standard library parser), raises a
+``TypeError`` instead of silently ignoring the arguments.
+
 
 defusedxml (package)
 --------------------

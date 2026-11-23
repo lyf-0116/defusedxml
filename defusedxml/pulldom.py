@@ -9,6 +9,7 @@ from __future__ import print_function, absolute_import
 
 from xml.dom.pulldom import parse as _parse
 from xml.dom.pulldom import parseString as _parseString
+from .common import _check_parser
 from .sax import make_parser
 
 __origin__ = "xml.dom.pulldom"
@@ -27,6 +28,8 @@ def parse(
         parser.forbid_dtd = forbid_dtd
         parser.forbid_entities = forbid_entities
         parser.forbid_external = forbid_external
+    else:
+        _check_parser(parser, forbid_dtd, forbid_entities, forbid_external)
     return _parse(stream_or_string, parser, bufsize)
 
 
@@ -38,4 +41,6 @@ def parseString(
         parser.forbid_dtd = forbid_dtd
         parser.forbid_entities = forbid_entities
         parser.forbid_external = forbid_external
+    else:
+        _check_parser(parser, forbid_dtd, forbid_entities, forbid_external)
     return _parseString(string, parser)

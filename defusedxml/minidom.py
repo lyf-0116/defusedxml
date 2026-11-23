@@ -8,6 +8,7 @@
 from __future__ import print_function, absolute_import
 
 from xml.dom.minidom import _do_pulldom_parse
+from .common import _check_parser
 from . import expatbuilder as _expatbuilder
 from . import pulldom as _pulldom
 
@@ -26,6 +27,8 @@ def parse(
             forbid_external=forbid_external,
         )
     else:
+        if parser is not None:
+            _check_parser(parser, forbid_dtd, forbid_entities, forbid_external)
         return _do_pulldom_parse(
             _pulldom.parse,
             (file,),
@@ -51,6 +54,7 @@ def parseString(
             forbid_external=forbid_external,
         )
     else:
+        _check_parser(parser, forbid_dtd, forbid_entities, forbid_external)
         return _do_pulldom_parse(
             _pulldom.parseString,
             (string,),

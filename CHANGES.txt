@@ -6,6 +6,13 @@ defusedxml 0.8.0
 
 *Release date: 2023*
 
+- The ``forbid_dtd``, ``forbid_entities`` and ``forbid_external`` arguments
+  are no longer silently ignored when a caller-provided ``parser`` is passed
+  to ``ElementTree.parse()``, ``ElementTree.iterparse()``, ``pulldom`` and
+  ``minidom``. The parser's configuration is now checked against the
+  requested switches; a mismatch or an unsupported parser raises
+  ``TypeError`` instead of weakening the protection or failing to relax a
+  strict parser.
 - Fix testing without lxml
 - Test on 3.13-dev and PyPy 3.9
 

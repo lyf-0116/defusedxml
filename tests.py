@@ -288,6 +288,100 @@ class TestDefusedMinidomWithParser(TestDefusedMinidom):
         return doc.toxml()
 
 
+class TestParserSwitchContract(DefusedTestCase):
+    """The forbid_* switches must not be silently ignored when a parser is
+    passed in. A mismatch between the parser's configuration and the
+    facade arguments has to fail explicitly instead of weakening the
+    protection or pretending to relax a strict parser.
+    """
+
+    def test_etree_conflicting_switch_raises(self):
+        strict_parser = ElementTree.DefusedXMLParser(forbid_entities=True)
+        loose_parser = ElementTree.DefusedXMLParser(forbid_entities=False)
+        with self.assertRaises(TypeError):
+            ElementTree.parse(
+                self.xml_simple, parser=strict_parser, forbid_entities=False
+            )
+        with self.assertRaises(TypeError):
+            ElementTree.parse(
+                self.xml_simple, parser=loose_parser, forbid_entities=True
+            )
+        with self.assertRaises(TypeError):
+            list(
+                ElementTree.iterparse(
+                    self.xml_simple, parser=loose_parser, forbid_entities=True
+                )
+            )
+
+    def test_etree_plain_stdlib_parser_raises(self):
+        std_parser = orig_elementtree.XMLParser()
+        with self.assertRaises(TypeError):
+            ElementTree.parse(self.xml_simple, parser=std_parser)
+
+    def test_etree_consistent_parser_is_enforced(self):
+        strict_parser = ElementTree.DefusedXMLParser(forbid_entities=True)
+        with self.assertRaises(EntitiesForbidden):
+            ElementTree.parse(
+                self.xml_bomb, parser=strict_parser, forbid_entities=True
+            )
+        loose_parser = ElementTree.DefusedXMLParser(
+            forbid_entities=False, forbid_external=False
+        )
+        ElementTree.parse(
+            self.xml_bomb2,
+            parser=loose_parser,
+            forbid_entities=False,
+            forbid_external=False,
+        )
+
+    def test_etree_parser_is_not_mutated(self):
+        parser = ElementTree.DefusedXMLParser(forbid_entities=False)
+        with self.assertRaises(TypeError):
+            ElementTree.parse(
+                self.xml_simple, parser=parser, forbid_entities=True
+            )
+        self.assertFalse(parser.forbid_entities)
+        self.assertFalse(parser.forbid_dtd)
+        self.assertTrue(parser.forbid_external)
+
+    def test_minidom_conflicting_switch_raises(self):
+        strict_parser = expatreader.create_parser(forbid_entities=True)
+        with self.assertRaises(TypeError):
+            minidom.parse(
+                self.xml_simple, parser=strict_parser, forbid_entities=False
+            )
+        with self.assertRaises(TypeError):
+            minidom.parseString(
+                "<root/>", parser=strict_parser, forbid_entities=False
+            )
+
+    def test_pulldom_conflicting_switch_raises(self):
+        loose_parser = expatreader.create_parser(forbid_entities=False)
+        with self.assertRaises(TypeError):
+            list(
+                pulldom.parse(
+                    self.xml_simple, parser=loose_parser, forbid_entities=True
+                )
+            )
+        with self.assertRaises(TypeError):
+            list(
+                pulldom.parseString(
+                    "<root/>", parser=loose_parser, forbid_entities=True
+                )
+            )
+
+    def test_sax_plain_stdlib_parser_raises(self):
+        import xml.sax
+
+        std_parser = xml.sax.make_parser()
+        with self.assertRaises(TypeError):
+            list(
+                pulldom.parseString(
+                    "<root/>", parser=std_parser, forbid_entities=True
+                )
+            )
+
+
 class TestDefusedPulldom(BaseTests):
     module = pulldom
 
