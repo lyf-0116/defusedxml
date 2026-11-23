@@ -303,6 +303,12 @@ disallow any access to remote or local resources in external entities or
 DTD and raising an *ExternalReferenceForbidden* exception when a DTD or
 entity references an external resource.
 
+The three flags are also exposed as `forbid_dtd`, `forbid_entities` and
+`forbid_external` attributes on the parser and builder objects. The expat
+callbacks are installed unconditionally and read the attributes on every
+event, so changing an attribute after the object was constructed takes
+effect for the next parse instead of being silently ignored.
+
 ### defusedxml (package)
 
 DefusedXmlException, DTDForbidden, EntitiesForbidden,

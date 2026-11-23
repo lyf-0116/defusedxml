@@ -90,27 +90,40 @@ class DefusedXMLParser(_XMLParser):
         self.forbid_entities = forbid_entities
         self.forbid_external = forbid_external
         parser = self.parser
-        if self.forbid_dtd:
-            parser.StartDoctypeDeclHandler = self.defused_start_doctype_decl
-        if self.forbid_entities:
-            parser.EntityDeclHandler = self.defused_entity_decl
-            parser.UnparsedEntityDeclHandler = self.defused_unparsed_entity_decl
-        if self.forbid_external:
-            parser.ExternalEntityRefHandler = self.defused_external_entity_ref_handler
+        # The handlers are installed unconditionally and consult the
+        # mutable forbid_* attributes on every callback. This keeps the
+        # binding live with attribute changes after construction instead
+        # of taking a one-time snapshot of the policy.
+        parser.StartDoctypeDeclHandler = self.defused_start_doctype_decl
+        parser.EntityDeclHandler = self.defused_entity_decl
+        parser.UnparsedEntityDeclHandler = self.defused_unparsed_entity_decl
+        parser.ExternalEntityRefHandler = self.defused_external_entity_ref_handler
 
     def defused_start_doctype_decl(self, name, sysid, pubid, has_internal_subset):
+        if not self.forbid_dtd:
+            return
         raise DTDForbidden(name, sysid, pubid)
 
     def defused_entity_decl(
         self, name, is_parameter_entity, value, base, sysid, pubid, notation_name
     ):
+        if not self.forbid_entities:
+            return
         raise EntitiesForbidden(name, value, base, sysid, pubid, notation_name)
 
     def defused_unparsed_entity_decl(self, name, base, sysid, pubid, notation_name):
         # expat 1.2
+        if not self.forbid_entities:
+            return
         raise EntitiesForbidden(name, None, base, sysid, pubid, notation_name)  # pragma: no cover
 
     def defused_external_entity_ref_handler(self, context, base, sysid, pubid):
+        if not self.forbid_external:
+            # ElementTree never installs an ExternalEntityRefHandler, so
+            # expat leaves the reference unresolved without touching any
+            # local or remote resource. pyexpat requires an integer result
+            # from the callback, 1 marks the reference as handled.
+            return 1
         raise ExternalReferenceForbidden(context, base, sysid, pubid)
 
 

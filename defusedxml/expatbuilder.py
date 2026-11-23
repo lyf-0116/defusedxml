@@ -27,31 +27,44 @@ class DefusedExpatBuilder(_ExpatBuilder):
         self.forbid_external = forbid_external
 
     def defused_start_doctype_decl(self, name, sysid, pubid, has_internal_subset):
+        if not self.forbid_dtd:
+            return _ExpatBuilder.start_doctype_decl_handler(
+                self, name, sysid, pubid, has_internal_subset
+            )
         raise DTDForbidden(name, sysid, pubid)
 
     def defused_entity_decl(
         self, name, is_parameter_entity, value, base, sysid, pubid, notation_name
     ):
+        if not self.forbid_entities:
+            return _ExpatBuilder.entity_decl_handler(
+                self, name, is_parameter_entity, value, base, sysid, pubid, notation_name
+            )
         raise EntitiesForbidden(name, value, base, sysid, pubid, notation_name)
 
     def defused_unparsed_entity_decl(self, name, base, sysid, pubid, notation_name):
         # expat 1.2
+        if not self.forbid_entities:
+            return
         raise EntitiesForbidden(name, None, base, sysid, pubid, notation_name)  # pragma: no cover
 
     def defused_external_entity_ref_handler(self, context, base, sysid, pubid):
+        if not self.forbid_external:
+            return _ExpatBuilder.external_entity_ref_handler(self, context, base, sysid, pubid)
         raise ExternalReferenceForbidden(context, base, sysid, pubid)
 
     def install(self, parser):
         _ExpatBuilder.install(self, parser)
 
-        if self.forbid_dtd:
-            parser.StartDoctypeDeclHandler = self.defused_start_doctype_decl
-        if self.forbid_entities:
-            # if self._options.entities:
-            parser.EntityDeclHandler = self.defused_entity_decl
-            parser.UnparsedEntityDeclHandler = self.defused_unparsed_entity_decl
-        if self.forbid_external:
-            parser.ExternalEntityRefHandler = self.defused_external_entity_ref_handler
+        # The handlers are installed unconditionally and consult the
+        # mutable forbid_* attributes on every callback. install() runs on
+        # every parse via getParser(), while policy changes between parses
+        # stay effective because the callbacks read the attributes live.
+        parser.StartDoctypeDeclHandler = self.defused_start_doctype_decl
+        # if self._options.entities:
+        parser.EntityDeclHandler = self.defused_entity_decl
+        parser.UnparsedEntityDeclHandler = self.defused_unparsed_entity_decl
+        parser.ExternalEntityRefHandler = self.defused_external_entity_ref_handler
 
 
 class DefusedExpatBuilderNS(_Namespaces, DefusedExpatBuilder):

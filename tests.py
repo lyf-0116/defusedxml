@@ -347,6 +347,199 @@ class TestDefusedSax(BaseTests):
         self.assertEqual(repr(ctx.exception), msg)
 
 
+class TestPostConstructionPolicy(DefusedTestCase):
+    """forbid_* attributes must stay effective after construction.
+
+    The expat handlers are bound once but have to consult the mutable
+    attributes on every callback instead of snapshotting the policy at
+    construction time.
+    """
+    content_binary = True
+
+    def _sax_parse(self, parser, data):
+        parser.setContentHandler(XMLGenerator(io.StringIO()))
+        parser.parse(io.BytesIO(data))
+
+    def test_elementtree_attribute_flip(self):
+        bomb = self.get_content(self.xml_bomb)
+        dtd = self.get_content(self.xml_dtd)
+
+        parser = ElementTree.DefusedXMLParser(forbid_entities=False)
+        parser.forbid_entities = True
+        with self.assertRaises(EntitiesForbidden):
+            parser.feed(bomb)
+            parser.close()
+
+        parser = ElementTree.DefusedXMLParser(forbid_dtd=False)
+        parser.forbid_dtd = True
+        with self.assertRaises(DTDForbidden):
+            parser.feed(dtd)
+            parser.close()
+
+        parser = ElementTree.DefusedXMLParser(forbid_entities=True)
+        parser.forbid_entities = False
+        parser.feed(self.get_content(self.xml_bomb2))
+        parser.close()
+
+    def test_sax_attribute_flip(self):
+        bomb = self.get_content(self.xml_bomb)
+
+        parser = expatreader.create_parser(forbid_entities=False)
+        parser.forbid_entities = True
+        with self.assertRaises(EntitiesForbidden):
+            self._sax_parse(parser, bomb)
+
+        parser = expatreader.create_parser(forbid_entities=True)
+        parser.forbid_entities = False
+        self._sax_parse(parser, self.get_content(self.xml_bomb2))
+
+        parser = expatreader.create_parser(forbid_dtd=False)
+        parser.forbid_dtd = True
+        with self.assertRaises(DTDForbidden):
+            self._sax_parse(parser, bomb)
+
+    def test_expatbuilder_attribute_flip(self):
+        bomb = self.get_content(self.xml_bomb)
+        dtd = self.get_content(self.xml_dtd)
+
+        from defusedxml import expatbuilder
+
+        builder = expatbuilder.DefusedExpatBuilder(forbid_entities=False)
+        builder.forbid_entities = True
+        with self.assertRaises(EntitiesForbidden):
+            builder.parseString(bomb)
+
+        builder = expatbuilder.DefusedExpatBuilder(forbid_dtd=False)
+        builder.forbid_dtd = True
+        with self.assertRaises(DTDForbidden):
+            builder.parseString(dtd)
+
+        builder = expatbuilder.DefusedExpatBuilder(forbid_entities=True)
+        builder.forbid_entities = False
+        builder.parseString(self.get_content(self.xml_bomb2))
+
+    def test_xmlrpc_attribute_flip(self):
+        from defusedxml.xmlrpc import DefusedExpatParser
+
+        def make_parser(**kwargs):
+            target = XmlRpcTarget()
+            return target, DefusedExpatParser(target, **kwargs)
+
+        _, parser = make_parser(forbid_entities=False)
+        parser.forbid_entities = True
+        with self.assertRaises(EntitiesForbidden):
+            parser.feed(self.get_content(self.xml_bomb))
+            parser.close()
+
+        _, parser = make_parser(forbid_dtd=False)
+        parser.forbid_dtd = True
+        with self.assertRaises(DTDForbidden):
+            parser.feed(self.get_content(self.xml_dtd))
+            parser.close()
+
+        _, parser = make_parser(forbid_entities=True)
+        parser.forbid_entities = False
+        parser.feed(self.get_content(self.xml_bomb2))
+        parser.close()
+
+    def test_external_switch_flip_and_no_resolution(self):
+        content = self.get_content(self.xml_external_file)
+        content = content.replace(b"/PATH/TO", HERE.encode(sys.getfilesystemencoding()))
+
+        parser = ElementTree.DefusedXMLParser(forbid_entities=False, forbid_external=False)
+        parser.forbid_external = True
+        with self.assertRaises(ExternalReferenceForbidden):
+            parser.feed(content)
+            parser.close()
+
+        sax_parser = expatreader.create_parser(forbid_entities=False, forbid_external=False)
+        sax_parser.forbid_external = True
+        with self.assertRaises(ExternalReferenceForbidden):
+            self._sax_parse(sax_parser, content)
+
+        # With the switch off the external entity must not be resolved:
+        # ElementTree skips the reference without opening any resource.
+        with mock.patch("builtins.open", side_effect=AssertionError("file access")):
+            relaxed = ElementTree.DefusedXMLParser(forbid_entities=False, forbid_external=False)
+            root = relaxed.feed(content) or relaxed.close()
+        self.assertIsNone(root.text)
+
+    def test_unparsed_entity_decl_respects_switch(self):
+        unparsed = b'<!DOCTYPE r [<!ENTITY pic SYSTEM "p.gif" NDATA gif>]><r/>'
+
+        parser = ElementTree.DefusedXMLParser(forbid_entities=False)
+        parser.feed(unparsed)
+        parser.close()
+
+        sax_parser = expatreader.create_parser(forbid_entities=False)
+        dtd_handler = sax_parser.getDTDHandler()
+        events = []
+        dtd_handler.unparsedEntityDecl = lambda *args: events.append(args)
+        self._sax_parse(sax_parser, unparsed)
+        self.assertEqual(events[0][0], "pic")
+        self.assertEqual(events[0][-1], "gif")
+
+        sax_parser = expatreader.create_parser(forbid_entities=True)
+        with self.assertRaises(EntitiesForbidden):
+            self._sax_parse(sax_parser, unparsed)
+
+        dtd = self.get_content(self.xml_dtd)
+        lex_parser = expatreader.create_parser(forbid_dtd=False, forbid_external=False)
+
+        class LexicalXMLGenerator(XMLGenerator):
+            def __init__(self, out):
+                super().__init__(out)
+                self.doctype = None
+
+            def startDTD(self, name, pubid, system_id):
+                self.doctype = name
+
+            def endDTD(self):
+                pass
+
+            def comment(self, text):
+                pass
+
+            def startCDATA(self):
+                pass
+
+            def endCDATA(self):
+                pass
+
+        lexical = LexicalXMLGenerator(io.StringIO())
+        lex_parser.setProperty("http://xml.org/sax/properties/lexical-handler", lexical)
+        lex_parser.setContentHandler(lexical)
+        lex_parser.parse(io.BytesIO(dtd))
+        self.assertEqual(lexical.doctype, "html")
+
+        from defusedxml import expatbuilder
+
+        expatbuilder.DefusedExpatBuilder(forbid_entities=False).parseString(unparsed)
+        with self.assertRaises(EntitiesForbidden):
+            expatbuilder.DefusedExpatBuilder(forbid_entities=True).parseString(unparsed)
+
+        external = self.get_content(self.xml_external_file)
+        external = external.replace(b"/PATH/TO", HERE.encode(sys.getfilesystemencoding()))
+        relaxed_builder = expatbuilder.DefusedExpatBuilderNS(
+            forbid_entities=False, forbid_external=False
+        )
+        document = relaxed_builder.parseString(external)
+        self.assertEqual(document.documentElement.tagName, "root")
+
+        from defusedxml.xmlrpc import DefusedExpatParser
+
+        target2 = XmlRpcTarget()
+        relaxed = DefusedExpatParser(target2, forbid_entities=False)
+        relaxed.feed(unparsed)
+        relaxed.close()
+
+        target3 = XmlRpcTarget()
+        strict = DefusedExpatParser(target3, forbid_entities=True)
+        with self.assertRaises(EntitiesForbidden):
+            strict.feed(unparsed)
+            strict.close()
+
+
 @unittest.skipUnless(lxml is not None, "test requires lxml")
 class TestDefusedLxml(BaseTests):
     module = lxml

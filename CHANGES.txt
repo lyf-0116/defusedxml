@@ -1,6 +1,18 @@
 Changelog
 =========
 
+defusedxml 0.8.1 (unreleased)
+-----------------------------
+
+- The ``forbid_dtd``, ``forbid_entities`` and ``forbid_external``
+  attributes of all parser and builder classes are now consulted on every
+  expat callback. Previously the callbacks were installed conditionally at
+  construction time, so ``ElementTree.XMLParser`` and the xmlrpc
+  ``FastParser`` silently ignored attribute changes after construction
+  while ``xml.sax`` and ``xml.dom.expatbuilder`` honored them. All four
+  facades now share the same lifecycle and enforce the current attribute
+  values on every parse.
+
 defusedxml 0.8.0
 ----------------
 
