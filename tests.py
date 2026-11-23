@@ -261,6 +261,7 @@ class TestDefusedMinidom(BaseTests):
     module = minidom
 
     cyclic_error = ExpatError
+    dtd_external_ref = True
 
     iterparse = None
 
@@ -271,6 +272,12 @@ class TestDefusedMinidom(BaseTests):
     def parseString(self, xmlstring, **kwargs):
         doc = self.module.parseString(xmlstring, **kwargs)
         return doc.toxml()
+
+    def test_dtd_with_external_ref_and_bufsize(self):
+        self.assertRaises(
+            self.external_ref_exception, self.parse, self.xml_dtd, bufsize=2**16 - 20
+        )
+        self.parse(self.xml_dtd, bufsize=2**16 - 20, forbid_external=False)
 
 
 class TestDefusedMinidomWithParser(TestDefusedMinidom):

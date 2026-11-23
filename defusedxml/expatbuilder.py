@@ -9,6 +9,7 @@ from __future__ import print_function, absolute_import
 
 from xml.dom.expatbuilder import ExpatBuilder as _ExpatBuilder
 from xml.dom.expatbuilder import Namespaces as _Namespaces
+from xml.parsers import expat
 
 from .common import DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden
 
@@ -43,6 +44,7 @@ class DefusedExpatBuilder(_ExpatBuilder):
 
     def install(self, parser):
         _ExpatBuilder.install(self, parser)
+        parser.SetParamEntityParsing(expat.XML_PARAM_ENTITY_PARSING_UNLESS_STANDALONE)
 
         if self.forbid_dtd:
             parser.StartDoctypeDeclHandler = self.defused_start_doctype_decl

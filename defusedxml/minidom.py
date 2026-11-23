@@ -17,8 +17,12 @@ __origin__ = "xml.dom.minidom"
 def parse(
     file, parser=None, bufsize=None, forbid_dtd=False, forbid_entities=True, forbid_external=True
 ):
-    """Parse a file into a DOM by filename or file object."""
-    if parser is None and not bufsize:
+    """Parse a file into a DOM by filename or file object.
+
+    The bufsize argument is accepted for compatibility but is ignored unless
+    a custom parser is supplied.
+    """
+    if parser is None:
         return _expatbuilder.parse(
             file,
             forbid_dtd=forbid_dtd,
